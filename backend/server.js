@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const csv = require('csv-parser');
+const path = require('path'); // BUNA İHTİYACIMIZ VAR
 
 const app = express();
 app.use(cors());
@@ -11,10 +12,12 @@ app.post('/api/calculate-mrp', (req, res) => {
     const orders = req.body.orders; 
     const results = {};
 
-    fs.createReadStream('ANA_VERI_TABANI.csv')
+    // DİKKAT: Vercel bulut ortamında dosyayı bulabilmesi için __dirname kullanıyoruz
+    const csvFilePath = path.join(__dirname, 'ANA_VERI_TABANI.csv');
+
+    fs.createReadStream(csvFilePath)
         .pipe(csv({ 
             separator: ';',
-            // Sütun isimlerindeki bozuklukları görmezden gelip sıraya göre (index) isim atıyoruz
             mapHeaders: ({ header, index }) => {
                 if (index === 0) return 'model';
                 if (index === 2) return 'parcaNo';
@@ -24,40 +27,37 @@ app.post('/api/calculate-mrp', (req, res) => {
             }
         })) 
         .on('data', (row) => {
-            // Verilerin etrafındaki gizli boşlukları temizliyoruz (trim)
             const model = row.model ? row.model.trim() : '';
             const partNo = row.parcaNo ? row.parcaNo.trim() : '';
             const material = row.malzeme ? row.malzeme.trim() : '';
             
-            // Excel'deki virgüllü rakamları (Örn: 1,5) sistemin anladığı noktaya (1.5) çeviriyoruz
             const qtyStr = row.adet ? row.adet.toString().replace(',', '.') : '0';
             const qtyPerUnit = parseFloat(qtyStr) || 0; 
 
-            // Eğer girilen siparişlerde bu model varsa ve adedi 0'dan büyükse hesapla
             if (orders[model] && orders[model] > 0) {
                 const totalQty = qtyPerUnit * orders[model];
 
-                // Parça listede yoksa ekle
                 if (!results[partNo]) {
-                    results[partNo] = {
-                        partNo: partNo,
-                        material: material,
-                        totalQuantity: 0
-                    };
+                    results[partNo] = { partNo, material, totalQuantity: 0 };
                 }
-                // Varsa üstüne topla
                 results[partNo].totalQuantity += totalQty;
             }
         })
         .on('end', () => {
-            res.json(Object.values(results)); // Sonucu React'a gönder
+            res.json(Object.values(results));
         })
         .on('error', (err) => {
-            res.status(500).json({ error: 'CSV okunurken hata oluştu', details: err });
+            res.status(500).json({ error: 'CSV okunurken hata', details: err });
         });
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-    console.log(`Backend ${PORT} portunda çalışıyor...`);
-});
+// VERCEL İÇİN EN KRİTİK KISIM: 
+// Localhost'tayken portu dinle, Vercel'deyken ise sadece dışarı aktar (export et)
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = 3001;
+    app.listen(PORT, () => {
+        console.log(`Backend ${PORT} portunda çalışıyor...`);
+    });
+}
+
+module.exports = app;

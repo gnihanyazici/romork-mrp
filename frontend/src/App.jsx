@@ -24,18 +24,22 @@ function App() {
   };
 
   // Backend'e istek at ve listeyi al
-  const calculateMRP = async () => {
+ const calculateMRP = async () => {
     try {
-      const response = await axios.post('http://localhost:3001/api/calculate-mrp', {
+      // Localhost'ta iken 3001 portuna, canlı Vercel sitesindeyken direkt /api/ yoluna gider
+      const apiUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:3001/api/calculate-mrp' 
+        : '/api/calculate-mrp';
+
+      const response = await axios.post(apiUrl, {
         orders: orders
       });
       setMrpList(response.data);
     } catch (error) {
       console.error("Hesaplama hatası:", error);
-      alert("Backend'e bağlanılamadı. Server'ın çalıştığından emin olun.");
+      alert("Backend'e bağlanılamadı.");
     }
   };
-
   // Sonuçları gerçek Excel (.xlsx) olarak indirme fonksiyonu
   const exportToExcel = () => {
     if (mrpList.length === 0) return;
